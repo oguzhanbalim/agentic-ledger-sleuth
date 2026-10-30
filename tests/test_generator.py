@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import shutil
 import sqlite3
 from collections import Counter
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 from ledger_sleuth.generator import (
     HELDOUT_SEED,
@@ -93,10 +96,19 @@ def test_every_benign_item_surfaces_as_an_open_item(
     assert not missing
 
 
-def test_store_cannot_write(store: LedgerStore) -> None:
-    import pytest
-
-    with pytest.raises(sqlite3.OperationalError):
-        store.conn.execute("DELETE FROM ledger_rows")
-    with pytest.raises(sqlite3.OperationalError):
-        store.conn.execute("UPDATE ledger_rows SET amount_minor = 0")
+def test_store_cannot_write_even_when_the_file_is_writable(
+    dataset_root: Path, tmp_path: Path
+) -> None:
+    """The file permission is one layer; the connection itself must refuse writes as well."""
+    copy = tmp_path / LEDGER_FILENAME
+    shutil.copyfile(public_dir(dataset_root) / LEDGER_FILENAME, copy)
+    copy.chmod(0o644)
+    store = LedgerStore(tmp_path)
+    for statement in (
+        "DELETE FROM ledger_rows",
+        "UPDATE ledger_rows SET amount_minor = 0",
+        "DROP TABLE ledger_rows",
+    ):
+        with pytest.raises(sqlite3.OperationalError):
+            store.conn.execute(statement)
+    store.close()

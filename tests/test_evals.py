@@ -124,8 +124,9 @@ def test_baseline_has_measured_blind_spots(dataset_root: Path) -> None:
 class PolicyMessages:
     """Answers any cluster, closing everything as benign. Exercises the harness only."""
 
-    def __init__(self, *, refuse: bool = False) -> None:
+    def __init__(self, *, refuse: bool = False, verdict: str = "accept") -> None:
         self.refuse = refuse
+        self.verdict = verdict
         self.calls = 0
 
     def create(self, **kwargs: Any) -> Any:
@@ -135,7 +136,7 @@ class PolicyMessages:
                 [], stop_reason="refusal", stop_details={"type": "refusal", "category": None}
             )
         if "reviewer" in kwargs["system"][0]["text"]:
-            return message([text({"verdict": "accept", "objections": []})])
+            return message([text({"verdict": self.verdict, "objections": []})])
         brief_text = kwargs["messages"][0]["content"].split("\n\n", 1)[1]
         brief = json.loads(brief_text)
         rows = [r for f in brief["findings"] for r in f["row_ids"]]
@@ -179,8 +180,8 @@ class PolicyMessages:
 
 
 class PolicyClient:
-    def __init__(self, *, refuse: bool = False) -> None:
-        self.messages = PolicyMessages(refuse=refuse)
+    def __init__(self, *, refuse: bool = False, verdict: str = "accept") -> None:
+        self.messages = PolicyMessages(refuse=refuse, verdict=verdict)
 
 
 def test_agent_harness_counts_only_accepted_closures(dataset_root: Path, tmp_path: Path) -> None:
@@ -200,6 +201,21 @@ def test_failed_agent_run_degrades_to_the_rules_answer(dataset_root: Path, tmp_p
         dataset_root, PolicyClient(refuse=True), max_clusters=8, seed=1, run_dir=tmp_path / "run"
     )
     assert all(o.status == "refused" for o in result.outcomes)
+    assert result.agent.total.predictions == result.baseline_on_sample.total.predictions
+    assert result.agent.closures_total == 0
+
+
+def test_escalated_case_closes_nothing_even_though_it_says_benign(
+    dataset_root: Path, tmp_path: Path
+) -> None:
+    result = evaluate_agent(
+        dataset_root,
+        PolicyClient(verdict="escalate"),
+        max_clusters=8,
+        seed=1,
+        run_dir=tmp_path / "run",
+    )
+    assert all(o.status == "escalated" and o.case_file for o in result.outcomes)
     assert result.agent.total.predictions == result.baseline_on_sample.total.predictions
     assert result.agent.closures_total == 0
 

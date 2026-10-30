@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import sqlite3
 from collections import defaultdict
-from collections.abc import Iterable
 from datetime import date, datetime
 from functools import cached_property
 from pathlib import Path
+from typing import Any
 
 from ledger_sleuth.models import (
     ApprovalTier,
@@ -44,7 +44,7 @@ class LedgerStore:
     def close(self) -> None:
         self.conn.close()
 
-    def _select(self, sql: str) -> Iterable[tuple]:  # type: ignore[type-arg]
+    def _select(self, sql: str) -> list[tuple[Any, ...]]:
         return self.conn.execute(sql).fetchall()
 
     @cached_property

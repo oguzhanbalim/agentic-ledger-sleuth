@@ -137,16 +137,15 @@ class Orchestrator:
 
     def investigate(self, cluster: Cluster) -> CaseOutcome:
         investigator = self._investigator()
+        drafts_before = {draft.draft_id for draft in self._tools.queue.all_drafts()}
         outcome = self._run_case(cluster, investigator)
         outcome.tool_log = investigator.tool_calls
-        if outcome.status != "accepted":
-            self._withdraw_drafts(outcome)
+        self._settle_drafts(outcome, drafts_before)
         return outcome
 
     def _run_case(self, cluster: Cluster, investigator: Conversation[CaseFile]) -> CaseOutcome:
         result = investigator.send(self.cluster_brief(cluster))
-        verdict: ReviewVerdict | None = None
-        for _ in range(MAX_REVIEW_ROUNDS + 1):
+        for review_round in range(MAX_REVIEW_ROUNDS + 1):
             result, gate = self._through_gate(cluster, investigator, result)
             if result.status != "completed" or result.output is None:
                 return _from_loop(cluster, result)
@@ -165,18 +164,20 @@ class Orchestrator:
                 return CaseOutcome(cluster.cluster_id, "accepted", case, review=verdict)
             if verdict.verdict == "escalate":
                 return CaseOutcome(cluster.cluster_id, "escalated", case, review=verdict)
+            if review_round == MAX_REVIEW_ROUNDS:
+                return CaseOutcome(
+                    cluster.cluster_id,
+                    "escalated",
+                    case,
+                    review=verdict,
+                    detail="review rounds exhausted",
+                )
             result = investigator.send(
                 "The reviewer sent the case file back:\n- "
                 + "\n- ".join(verdict.objections)
                 + "\nAddress these and return the corrected case file."
             )
-        return CaseOutcome(
-            cluster.cluster_id,
-            "escalated",
-            result.output,
-            review=verdict,
-            detail="review rounds exhausted",
-        )
+        raise AssertionError("unreachable: the last review round always returns")
 
     def _through_gate(
         self,
@@ -210,12 +211,17 @@ class Orchestrator:
             f"the evidence gate:\n\n{case.model_dump_json(indent=1)}"
         )
 
-    def _withdraw_drafts(self, outcome: CaseOutcome) -> None:
-        if outcome.case_file is None:
-            return
-        for draft_id in outcome.case_file.adjustment_draft_ids:
-            if self._tools.queue.get(draft_id) is not None:
-                self._tools.queue.withdraw(draft_id, f"case outcome: {outcome.status}")
+    def _settle_drafts(self, outcome: CaseOutcome, drafts_before: set[str]) -> None:
+        """Only drafts an accepted case relies on stay pending. The rest are withdrawn."""
+        case = outcome.case_file
+        referenced = set(case.adjustment_draft_ids) if case else set()
+        kept = referenced if outcome.status == "accepted" else set()
+        for draft in self._tools.queue.all_drafts():
+            is_new_or_referenced = (
+                draft.draft_id not in drafts_before or draft.draft_id in referenced
+            )
+            if is_new_or_referenced and draft.draft_id not in kept and draft.status != "withdrawn":
+                self._tools.queue.withdraw(draft.draft_id, f"case outcome: {outcome.status}")
 
     def run(
         self,
@@ -243,10 +249,11 @@ class Orchestrator:
 
 
 def _from_loop(cluster: Cluster, result: LoopResult[Any]) -> CaseOutcome:
-    status: OutcomeStatus = {
-        "refused": "refused",
-        "truncated": "truncated",
-    }.get(result.status, "failed")  # type: ignore[assignment]
+    status: OutcomeStatus = "failed"
+    if result.status == "refused":
+        status = "refused"
+    elif result.status == "truncated":
+        status = "truncated"
     return CaseOutcome(cluster.cluster_id, status, detail=result.detail or result.status)
 
 

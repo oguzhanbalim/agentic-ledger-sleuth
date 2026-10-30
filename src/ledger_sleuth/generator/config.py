@@ -27,8 +27,8 @@ BENIGN_KINDS: tuple[str, ...] = (
     "typo_reference",
 )
 
-# Incident variants and weights. Variants marked "subtle" sit outside what the baseline rule
-# looks for on purpose: they are how the README measures where the rules are blind.
+# Incident variants and weights. Some variants sit outside what the baseline rule looks for, on
+# purpose: they are how the eval measures where the rules are blind.
 INCIDENT_PLAN: dict[str, tuple[int, dict[str, float]]] = {
     "duplicate_payment": (
         24,

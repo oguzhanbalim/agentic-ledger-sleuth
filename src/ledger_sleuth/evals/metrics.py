@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from collections import Counter
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -72,7 +72,6 @@ class Scorecard:
     variants: dict[tuple[str, str], tuple[int, int]]
     wrong_closures: int = 0
     closures_total: int = 0
-    notes: list[str] = field(default_factory=list)
 
     def false_alarms_per_1k(self, typology: str | None = None) -> float:
         if typology is None:

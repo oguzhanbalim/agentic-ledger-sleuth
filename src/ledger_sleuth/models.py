@@ -6,12 +6,7 @@ All money is an integer in minor units (kurus/cents). Floats never hold an amoun
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
-from typing import Literal
-
-Currency = Literal["TRY", "EUR", "USD"]
-DocType = Literal["INVOICE", "PAYMENT", "SALES_INVOICE", "RECEIPT", "REFUND", "JOURNAL"]
-Direction = Literal["out", "in", "none"]
+from datetime import date, datetime, timedelta
 
 SYSTEM_USER = "SYS-BATCH"
 CASH_DOC_TYPES: frozenset[str] = frozenset({"PAYMENT", "RECEIPT", "REFUND"})
@@ -91,6 +86,11 @@ class ApprovalTier:
     tier: int
     max_amount_try_minor: int | None  # None: no upper limit
     approver_role: str
+
+
+def in_close_window(day: date) -> bool:
+    """Last two and first two calendar days of a month, when finance works unusual hours."""
+    return day.day <= 2 or (day + timedelta(days=2)).month != day.month
 
 
 def format_minor(amount_minor: int) -> str:

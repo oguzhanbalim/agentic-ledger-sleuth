@@ -19,7 +19,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from ledger_sleuth.matcher import MatchResult, OpenItem, reference_similarity_pct, run_matcher
+from ledger_sleuth.matcher import OPEN_KINDS, MatchResult, OpenItem, run_matcher, similarity_pct
 from ledger_sleuth.models import BankRow, LedgerRow, format_minor
 from ledger_sleuth.rules import Finding, run_all_rules
 from ledger_sleuth.rules.detectors import normalize_address, normalize_iban
@@ -49,7 +49,7 @@ class _Input(BaseModel):
 
 class ListOpenItemsInput(_Input):
     company_id: str | None = Field(default=None, description="Filter by company, e.g. CO-A.")
-    kind: str | None = Field(default=None, description="Filter by open-item kind.")
+    kind: str | None = Field(default=None, description=f"One of: {', '.join(OPEN_KINDS)}.")
     counterparty_id: str | None = Field(default=None, description="Filter by counterparty.")
     limit: int = Field(default=DEFAULT_PAGE, ge=1, le=MAX_PAGE)
     offset: int = Field(default=0, ge=0)
@@ -339,7 +339,7 @@ class LedgerTools:
         )
         candidates = sorted(
             (
-                (reference_similarity_pct(row.reference, bank.reference), bank)
+                (similarity_pct(row.reference, bank.reference), bank)
                 for bank in self.store.bank_rows
                 if bank.company_id == row.company_id
                 and abs((bank.value_date - row.value_date).days) <= 30
@@ -354,7 +354,7 @@ class LedgerTools:
             "candidates": [
                 {
                     "bank_row_id": bank.bank_row_id,
-                    "reference_similarity_pct": similarity,
+                    "similarity_pct": similarity,
                     "gap_days": abs((bank.value_date - row.value_date).days),
                     "amount_minor": bank.amount_minor,
                     "currency": bank.currency,
@@ -428,9 +428,7 @@ class LedgerTools:
         links = []
         target_address = normalize_address(address)
         for employee in self.store.employees:
-            similarity = reference_similarity_pct(
-                target_address, normalize_address(employee.address)
-            )
+            similarity = similarity_pct(target_address, normalize_address(employee.address))
             iban_match = normalize_iban(employee.iban) in history
             if iban_match or similarity >= 70:
                 links.append(
@@ -500,7 +498,6 @@ class ToolSpec:
     name: str
     description: str
     input_model: type[_Input]
-    handler_name: str
     read_only: bool = True
 
 
@@ -510,47 +507,40 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         "Approval tiers per company: the limit in TRY minor units and the approving role. "
         "Use it before reasoning about whether an amount sits near a limit.",
         GetApprovalMatrixInput,
-        "get_approval_matrix",
     ),
     ToolSpec(
         "get_bank_rows",
         "Bank statement rows by ID or by filters. Signed amounts: negative leaves the account.",
         GetBankRowsInput,
-        "get_bank_rows",
     ),
     ToolSpec(
         "get_counterparty_profile",
         "Master data for one counterparty: age, IBAN change history with who changed and verified "
         "it, activity totals computed in code, and links to employees by IBAN or similar address.",
         GetCounterpartyProfileInput,
-        "get_counterparty_profile",
     ),
     ToolSpec(
         "get_ledger_rows",
         "Ledger rows by ID or by filters. Returns `totals` computed in code over all rows the "
         "filter matched, so never add amounts yourself. Copy a total from here instead.",
         GetLedgerRowsInput,
-        "get_ledger_rows",
     ),
     ToolSpec(
         "get_rule_findings",
         "Findings of the deterministic rules, with the numbers behind each one in `metrics`.",
         GetRuleFindingsInput,
-        "get_rule_findings",
     ),
     ToolSpec(
         "list_open_items",
         "Reconciliation exceptions the matcher could not resolve, with gaps and differences "
         "already computed in `metrics`.",
         ListOpenItemsInput,
-        "list_open_items",
     ),
     ToolSpec(
         "propose_adjustment",
         "Create a draft adjustment in the human approval queue. It does not change the ledger and "
         "nothing you can call will post it. Use only for a concrete, evidenced correction.",
         ProposeAdjustmentInput,
-        "propose_adjustment",
         read_only=False,
     ),
     ToolSpec(
@@ -558,7 +548,6 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         "Without arguments: matcher totals by class. With ledger_row_id: how that row was "
         "resolved, plus the nearest bank rows and their reference similarity.",
         RunMatcherInput,
-        "run_matcher",
     ),
 )
 SPECS_BY_NAME = {spec.name: spec for spec in TOOL_SPECS}
@@ -576,5 +565,5 @@ def call_tool(tools: LedgerTools, name: str, raw_input: dict[str, Any]) -> dict[
             f"{'.'.join(str(p) for p in e['loc']) or 'input'}: {e['msg']}" for e in exc.errors()
         )
         raise ToolError(f"invalid input for {name}: {details}") from exc
-    handler: Callable[[Any], dict[str, Any]] = getattr(tools, spec.handler_name)
+    handler: Callable[[Any], dict[str, Any]] = getattr(tools, spec.name)
     return handler(args)

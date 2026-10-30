@@ -4,7 +4,7 @@ import math
 from pathlib import Path
 
 from helpers import build_store, counterparty, ledger_row
-from ledger_sleuth.matcher import MatchResult, OpenItem, reference_similarity_pct, run_matcher
+from ledger_sleuth.matcher import MatchResult, OpenItem, run_matcher, similarity_pct
 from ledger_sleuth.rules import baseline_closures, run_all_rules
 from ledger_sleuth.rules import detectors as d
 from ledger_sleuth.store import LedgerStore
@@ -260,9 +260,9 @@ def test_matcher_classes_on_handwritten_rows(tmp_path: Path) -> None:
 
 
 def test_reference_similarity() -> None:
-    assert reference_similarity_pct("INV-1", "inv 1") == 100
-    assert reference_similarity_pct("INV-1000-123456", "INV-1000-132456") > 85
-    assert reference_similarity_pct("", "X") == 0
+    assert similarity_pct("INV-1", "inv 1") == 100
+    assert similarity_pct("INV-1000-123456", "INV-1000-132456") > 85
+    assert similarity_pct("", "X") == 0
 
 
 def _item(kind: str, **metrics: int | str) -> OpenItem:

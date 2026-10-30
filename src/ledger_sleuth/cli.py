@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import sys
+from dataclasses import asdict
 from pathlib import Path
 
 from ledger_sleuth.agent.clusters import build_clusters
@@ -79,21 +80,10 @@ def _cmd_investigate(args: argparse.Namespace) -> int:
         write_outcomes(outcomes, run_dir / "outcomes.jsonl")
     finally:
         store.close()
-    print(json.dumps(_usage_dict(orchestrator), indent=1))
+    print(json.dumps(asdict(orchestrator.usage), indent=1))
     print(f"case files: {run_dir / 'outcomes.jsonl'}")
     print(f"draft queue: {tools.queue.path}")
     return 0
-
-
-def _usage_dict(orchestrator: Orchestrator) -> dict[str, int]:
-    usage = orchestrator.usage
-    return {
-        "requests": usage.requests,
-        "input_tokens": usage.input_tokens,
-        "output_tokens": usage.output_tokens,
-        "cache_read_input_tokens": usage.cache_read_input_tokens,
-        "cache_creation_input_tokens": usage.cache_creation_input_tokens,
-    }
 
 
 def _cmd_eval_agent(args: argparse.Namespace) -> int:

@@ -145,6 +145,14 @@ def test_both_skills_reach_both_roles(tools: LedgerTools, cluster: Cluster) -> N
     assert {s.name for s in load_skills()} == set(SKILL_NAMES)
 
 
+def test_reviewer_is_offered_no_write_tool(tools: LedgerTools, cluster: Cluster) -> None:
+    client = ScriptedClient([message([text(_good_case(cluster, tools))]), message([text(ACCEPT)])])
+    Orchestrator(client, tools).investigate(cluster)
+    investigator, reviewer = client.messages.requests
+    assert "propose_adjustment" in {d["name"] for d in investigator["tools"]}
+    assert "propose_adjustment" not in {d["name"] for d in reviewer["tools"]}
+
+
 def test_gate_failure_is_fed_back_and_reviewer_waits(tools: LedgerTools, cluster: Cluster) -> None:
     case = _good_case(cluster, tools)
     client = ScriptedClient(
@@ -195,6 +203,75 @@ def test_gate_is_final_after_retries_and_reviewer_never_runs(
     draft = tools.queue.get(drafted["draft_id"])
     assert draft is not None
     assert draft.status == "withdrawn"
+
+
+def _draft_call(tools: LedgerTools, cluster: Cluster) -> dict[str, Any]:
+    finding = tools.finding(cluster.finding_ids[0])
+    assert finding is not None
+    row = tools.store.ledger_by_id[finding.row_ids[0]]
+    return tool_use(
+        "propose_adjustment",
+        {
+            "target_row_id": row.row_id,
+            "adjustment_type": "hold_payment",
+            "amount_minor": row.amount_minor,
+            "currency": row.currency,
+            "reason": "Hold until reviewed.",
+            "evidence_row_ids": [row.row_id],
+        },
+    )
+
+
+def test_draft_cited_by_an_accepted_case_stays_pending(
+    tools: LedgerTools, cluster: Cluster
+) -> None:
+    call = _draft_call(tools, cluster)
+    case = _good_case(cluster, tools)
+    case["claims"][0]["row_ids"].append(call["input"]["target_row_id"])
+
+    class Client:
+        """Fills in the draft id the queue assigned, which a script cannot know in advance."""
+
+        def __init__(self) -> None:
+            self.messages = self
+            self.turn = 0
+
+        def create(self, **kwargs: Any) -> Any:
+            self.turn += 1
+            if self.turn == 1:
+                return message([call], stop_reason="tool_use")
+            if self.turn == 2:
+                case["adjustment_draft_ids"] = [tools.queue.all_drafts()[0].draft_id]
+                return message([text(case)])
+            return message([text(ACCEPT)])
+
+    assert Orchestrator(Client(), tools).investigate(cluster).status == "accepted"
+    assert [d.status for d in tools.queue.all_drafts()] == ["pending_human_approval"]
+
+
+def test_draft_left_out_of_an_accepted_case_is_withdrawn(
+    tools: LedgerTools, cluster: Cluster
+) -> None:
+    client = ScriptedClient(
+        [
+            message([_draft_call(tools, cluster)], stop_reason="tool_use"),
+            message([text(_good_case(cluster, tools))]),
+            message([text(ACCEPT)]),
+        ]
+    )
+    assert Orchestrator(client, tools).investigate(cluster).status == "accepted"
+    assert [d.status for d in tools.queue.all_drafts()] == ["withdrawn"]
+
+
+def test_draft_from_a_refused_run_is_withdrawn(tools: LedgerTools, cluster: Cluster) -> None:
+    client = ScriptedClient(
+        [
+            message([_draft_call(tools, cluster)], stop_reason="tool_use"),
+            message([], stop_reason="refusal", stop_details={"type": "refusal", "category": None}),
+        ]
+    )
+    assert Orchestrator(client, tools).investigate(cluster).status == "refused"
+    assert [d.status for d in tools.queue.all_drafts()] == ["withdrawn"]
 
 
 def test_reviewer_send_back_returns_to_the_same_conversation(

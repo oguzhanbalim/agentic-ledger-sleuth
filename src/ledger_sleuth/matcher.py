@@ -58,10 +58,10 @@ def normalize_reference(reference: str) -> str:
     return "".join(ch for ch in reference.upper() if ch.isalnum())
 
 
-def reference_similarity_pct(left: str, right: str) -> int:
-    """Best similarity, as an integer percentage, of two references after normalisation.
+def similarity_pct(left: str, right: str) -> int:
+    """Similarity of two strings after normalisation, as an integer percentage.
 
-    A reference embedded in longer remittance text counts as full containment.
+    One string embedded in the other, as a reference in remittance text, scores at least 90.
     """
     a, b = normalize_reference(left), normalize_reference(right)
     if not a or not b:
@@ -196,7 +196,7 @@ def run_matcher(store: LedgerStore) -> MatchResult:
             if abs((b.value_date - row.value_date).days) <= AMOUNT_ONLY_WINDOW_DAYS
         ]
         scored = sorted(
-            ((reference_similarity_pct(row.reference, b.reference), b) for b in candidates),
+            ((similarity_pct(row.reference, b.reference), b) for b in candidates),
             key=lambda pair: (-pair[0], pair[1].bank_row_id),
         )
         if scored and scored[0][0] >= FUZZY_MIN_SIMILARITY_PCT:

@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 
 from ledger_sleuth.generator import config as cfg
-from ledger_sleuth.models import SYSTEM_USER
+from ledger_sleuth.models import SYSTEM_USER, in_close_window
 
 COMPANIES: tuple[tuple[str, str, str], ...] = (
     ("CO-A", "Synthetic Company A", "TRY"),
@@ -177,12 +177,6 @@ def make_address(rng: random.Random) -> str:
     )
 
 
-def is_close_window(day: date) -> bool:
-    """Last two and first two calendar days of a month."""
-    next_day = day + timedelta(days=2)
-    return day.day <= 2 or next_day.month != day.month
-
-
 class World:
     def __init__(self, config: cfg.GeneratorConfig) -> None:
         self.config = config
@@ -341,9 +335,9 @@ class World:
     def legit_posting_ts(self, day: date, rng: random.Random) -> datetime:
         """Working hours, plus the out-of-hours work real closes produce."""
         roll = rng.random()
-        if is_close_window(day) and day.weekday() >= 5 and roll < 0.5:
+        if in_close_window(day) and day.weekday() >= 5 and roll < 0.5:
             return datetime.combine(day, time(rng.randint(10, 17), rng.randint(0, 59), 0))
-        if is_close_window(day) and roll < 0.08:
+        if in_close_window(day) and roll < 0.08:
             hour = rng.choice((20, 21, 22, 23))
             return datetime.combine(day, time(hour, rng.randint(0, 59), rng.randint(0, 59)))
         if roll < 0.002:

@@ -8,11 +8,11 @@ import re
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import timedelta
 from itertools import pairwise
 
 from ledger_sleuth.matcher import normalize_reference
-from ledger_sleuth.models import SYSTEM_USER, LedgerRow
+from ledger_sleuth.models import SYSTEM_USER, LedgerRow, in_close_window
 from ledger_sleuth.store import LedgerStore
 
 # duplicate_payment
@@ -195,10 +195,6 @@ def detect_just_below_threshold(store: LedgerStore) -> list[Finding]:
     return findings
 
 
-def _in_close_window(day: date) -> bool:
-    return day.day <= 2 or (day + timedelta(days=2)).month != day.month
-
-
 def detect_off_hours(store: LedgerStore) -> list[Finding]:
     """A manual posting outside working hours or at a weekend. Batch jobs exempt; closes are not."""
     totals: dict[str, int] = defaultdict(int)
@@ -225,7 +221,7 @@ def detect_off_hours(store: LedgerStore) -> list[Finding]:
                     posted_by=user,
                     hour=ts.hour,
                     weekday=ts.weekday(),
-                    in_close_window=str(_in_close_window(ts.date())).lower(),
+                    in_close_window=str(in_close_window(ts.date())).lower(),
                     user_off_hours_share_bps=share_bps,
                     user_total_postings=totals[user],
                 )
