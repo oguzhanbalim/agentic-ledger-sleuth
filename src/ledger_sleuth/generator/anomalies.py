@@ -15,7 +15,6 @@ from ledger_sleuth.generator.world import (
     DraftIncident,
     DraftRow,
     World,
-    make_address,
     make_iban,
     spaced_iban,
 )
