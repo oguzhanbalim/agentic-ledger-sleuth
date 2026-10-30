@@ -64,6 +64,20 @@ def test_split_window_is_anchored_not_chained(tmp_path: Path) -> None:
     assert all(len(f.row_ids) == 2 for f in d.detect_invoice_splits(store))
 
 
+def test_split_is_not_lost_when_a_window_straddles_it(tmp_path: Path) -> None:
+    """The first window (30k + 60k) stays under the limit; the next one (60k + 50k) does not."""
+    store = build_store(
+        tmp_path,
+        counterparties=[counterparty()],
+        ledger_rows=[
+            ledger_row("L-1", ts="2025-03-01T10:00:00", amount=30_000_00),
+            ledger_row("L-2", ts="2025-03-07T10:00:00", amount=60_000_00),
+            ledger_row("L-3", ts="2025-03-13T10:00:00", amount=50_000_00),
+        ],
+    )
+    assert [f.row_ids for f in d.detect_invoice_splits(store)] == [("L-2", "L-3")]
+
+
 def test_bank_change_reports_verification_rather_than_trusting_it(tmp_path: Path) -> None:
     store = build_store(
         tmp_path,

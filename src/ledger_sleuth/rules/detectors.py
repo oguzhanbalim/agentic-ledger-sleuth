@@ -132,7 +132,9 @@ def detect_invoice_splits(store: LedgerStore) -> list[Finding]:
                         span_days=(burst[-1].value_date - burst[0].value_date).days,
                     )
                 )
-            index += len(burst)
+                index += len(burst)
+            else:
+                index += 1  # a window that did not fire may still share rows with the next one
     return findings
 
 
