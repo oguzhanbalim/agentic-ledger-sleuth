@@ -4,7 +4,6 @@ import math
 from pathlib import Path
 
 from helpers import build_store, counterparty, ledger_row
-
 from ledger_sleuth.matcher import MatchResult, OpenItem, reference_similarity_pct, run_matcher
 from ledger_sleuth.rules import baseline_closures, run_all_rules
 from ledger_sleuth.rules import detectors as d
