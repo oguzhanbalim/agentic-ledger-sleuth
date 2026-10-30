@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentic-ledger-sleuth"
+version = "0.1.0"
+description = "Investigates reconciliation exceptions and suspicious ledger transactions on Claude. Synthetic data only; the agent can draft adjustments but never post them."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "Oğuzhan Balım" }]
+dependencies = [
+    "anthropic>=2.3,<3",
+    "mcp>=2.3,<3",
+    "pydantic>=2.8,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[project.scripts]
+ledger-sleuth = "ledger_sleuth.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ledger_sleuth"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"skills" = "ledger_sleuth/_skills"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src"]

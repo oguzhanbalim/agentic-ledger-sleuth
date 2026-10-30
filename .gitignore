@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+build/
+dist/
+# Generated data and run artefacts are reproducible from a seed.
+data/
+runs/
+.DS_Store
+.env
